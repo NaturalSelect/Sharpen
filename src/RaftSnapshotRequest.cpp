@@ -7,7 +7,7 @@ sharpen::RaftSnapshotRequest::RaftSnapshotRequest() noexcept
     , leaderActorId_()
     , offset_(0)
     , last_(false)
-    , metadata_(0, 0)
+    , metadata_()
     , data_()
     , leaseRound_(0) {
 }

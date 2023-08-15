@@ -3,15 +3,17 @@
 #define _SHARPEN_ICONSENSUS_HPP
 
 #include "AwaitableFuture.hpp"
+#include "ConsensusConfigResult.hpp"
+#include "ConsensusPeersConfiguration.hpp"
+#include "ConsensusResult.hpp"
+#include "ConsensusWriter.hpp"
 #include "ILogStorage.hpp"
 #include "IMailReceiver.hpp"
 #include "IQuorum.hpp"
 #include "LogBatch.hpp"
 #include "WriteLogsResult.hpp"
-#include "ConsensusWriter.hpp"
-#include "ConsensusResult.hpp"
-#include "ConsensusConfigResult.hpp"
 #include <memory>
+
 
 namespace sharpen {
     class IConsensus {
@@ -36,6 +38,10 @@ namespace sharpen {
         virtual void NviStoreLastAppliedIndex(std::uint64_t index) = 0;
 
         virtual std::uint64_t NviGetLastAppliedIndex() const noexcept = 0;
+
+        virtual sharpen::Optional<sharpen::ConsensusPeersConfiguration>
+        NviGetPeersConfiguration() const = 0;
+
     public:
         IConsensus() noexcept = default;
 
@@ -63,13 +69,10 @@ namespace sharpen {
 
         virtual bool Changable() const = 0;
 
-        // returns current advanced count
-        // FIXME:refactor interface
         inline void WaitNextConsensus(sharpen::Future<sharpen::ConsensusResult> &future) {
             this->NviWaitNextConsensus(future);
         }
 
-        // returns current advanced count
         inline sharpen::ConsensusResult WaitNextConsensus() {
             sharpen::AwaitableFuture<sharpen::ConsensusResult> future;
             this->NviWaitNextConsensus(future);
@@ -135,6 +138,10 @@ namespace sharpen {
 
         inline std::uint64_t GetLastAppliedIndex() const noexcept {
             return this->NviGetLastAppliedIndex();
+        }
+
+        inline sharpen::Optional<sharpen::ConsensusPeersConfiguration> GetPeersConfiguration() const {
+            return this->NviGetPeersConfiguration();
         }
     };
 }   // namespace sharpen

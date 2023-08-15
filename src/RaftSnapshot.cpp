@@ -2,7 +2,7 @@
 
 sharpen::RaftSnapshot::RaftSnapshot(std::unique_ptr<sharpen::IRaftSnapshotChunk> chunk) noexcept
     : chunk_(std::move(chunk))
-    , metadata_(0, 0) {
+    , metadata_() {
 }
 
 sharpen::RaftSnapshot::RaftSnapshot(std::unique_ptr<sharpen::IRaftSnapshotChunk> chunk,

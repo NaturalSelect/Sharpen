@@ -3,6 +3,7 @@
 #define _SHARPEN_RAFTSNAPSHOTMETADATA_HPP
 
 #include "BinarySerializable.hpp"
+#include "ConsensusPeersConfiguration.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -14,11 +15,10 @@ namespace sharpen {
 
         std::uint64_t lastIndex_;
         std::uint64_t lastTerm_;
+        sharpen::ConsensusPeersConfiguration peers_;
 
     public:
         RaftSnapshotMetadata() noexcept;
-
-        RaftSnapshotMetadata(std::uint64_t lastIndex, std::uint64_t lastTerm) noexcept;
 
         RaftSnapshotMetadata(const Self &other) noexcept;
 
@@ -46,6 +46,14 @@ namespace sharpen {
 
         inline void SetLastTerm(std::uint64_t term) noexcept {
             this->lastTerm_ = term;
+        }
+
+        inline sharpen::ConsensusPeersConfiguration &Peers() noexcept {
+            return this->peers_;
+        }
+
+        inline const sharpen::ConsensusPeersConfiguration &Peers() const noexcept {
+            return this->peers_;
         }
 
         std::size_t ComputeSize() const noexcept;

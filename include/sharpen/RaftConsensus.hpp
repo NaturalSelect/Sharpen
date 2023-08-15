@@ -15,17 +15,18 @@
 #include "Noncopyable.hpp"
 #include "RaftElectionRecord.hpp"
 #include "RaftHeartbeatMailProvider.hpp"
+#include "RaftLeaderCounter.hpp"
 #include "RaftLeaderRecord.hpp"
 #include "RaftLeaseStatus.hpp"
 #include "RaftOption.hpp"
 #include "RaftPrevoteRecord.hpp"
 #include "RaftRole.hpp"
 #include "RaftVoteRecord.hpp"
-#include "RaftLeaderCounter.hpp"
 #include <initializer_list>
 #include <map>
 #include <queue>
 #include <set>
+
 
 namespace sharpen {
     class RaftConsensus
@@ -79,15 +80,17 @@ namespace sharpen {
         std::unique_ptr<sharpen::IRaftMailExtractor> mailExtractor_;
         // quorums
         std::unique_ptr<sharpen::IQuorum> peers_;
-        // std::unique_ptr<sharpen::IQuorum> learners_;
         // quorum broadcasters
         std::unique_ptr<sharpen::Broadcaster> peersBroadcaster_;
-        // std::unique_ptr<sharpen::Broadcaster> learnerBroadcaster_;
 
         // quorum heartbeat provider
         std::unique_ptr<sharpen::RaftHeartbeatMailProvider> heartbeatProvider_;
-        // learner heartbeat provider
 
+        // learners
+        std::set<sharpen::ActorId> learners_;
+        // config change
+        std::atomic_bool changeable_;
+        sharpen::ConsensusPeersConfiguration peersConfig_;
 
         // workers
         std::unique_ptr<sharpen::IWorkerGroup> worker_;
@@ -105,6 +108,8 @@ namespace sharpen {
 
         void LoadVoteFor();
 
+        void LoadPeersConfig();
+
         void SetTerm(std::uint64_t term);
 
         sharpen::RaftVoteRecord GetVote() const noexcept;
@@ -112,6 +117,8 @@ namespace sharpen {
         void SetVote(sharpen::RaftVoteRecord vote);
 
         std::uint64_t GetLastIndex() const;
+
+        std::uint64_t GetPeerEpoch() const;
 
         sharpen::IRaftSnapshotProvider &GetSnapshotProvider() noexcept;
 
@@ -190,6 +197,11 @@ namespace sharpen {
 
         void DoSyncHeartbeatProvider();
 
+        bool CheckInitPeers(const std::set<sharpen::ActorId> &peers) const noexcept;
+
+        bool CheckChangePeers(const std::set<sharpen::ActorId> &oldPeers,
+                              const std::set<sharpen::ActorId> &newPeers) const noexcept;
+
         sharpen::ConsensusConfigResult DoConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater);
 
@@ -210,12 +222,22 @@ namespace sharpen {
         virtual void NviStoreLastAppliedIndex(std::uint64_t index) override;
 
         virtual std::uint64_t NviGetLastAppliedIndex() const noexcept override;
+
+        virtual sharpen::Optional<sharpen::ConsensusPeersConfiguration>
+        NviGetPeersConfiguration() const override;
+
+        sharpen::Optional<sharpen::ConsensusPeersConfiguration> DoGetPeersConfiguration() const;
+
+        void DoStorePeersConfig(std::set<sharpen::ActorId> peers);
+
     public:
         constexpr static sharpen::ByteSlice voteKey{"vote", 4};
 
         constexpr static sharpen::ByteSlice termKey{"term", 4};
 
         constexpr static sharpen::ByteSlice lastAppliedKey{"lastAppiled", 11};
+
+        constexpr static sharpen::ByteSlice peersConfigKey{"peersConfig", 11};
 
         RaftConsensus(const sharpen::ActorId &id,
                       std::unique_ptr<sharpen::IStatusMap> statusMap,
@@ -267,24 +289,7 @@ namespace sharpen {
             return *this;
         }
 
-        // inline const sharpen::IQuorum &ImmutableQuorum() const noexcept
-        // {
-        //     assert(this->quorum_ != nullptr);
-        //     return *this->quorum_;
-        // }
-
         virtual sharpen::ConsensusWriter GetWriterId() const noexcept override;
-
-        // void ConfigurateLearners(std::function<void(sharpen::IQuorum&)> configurater);
-
-        // template<typename _Fn,typename ..._Args,typename _Check =
-        // sharpen::EnableIf<sharpen::IsCompletedBindableReturned<void,_Fn,sharpen::IQuorum&,_Args...>::Value>>
-        // inline void ConfigurateLearners(_Fn &&fn,_Args &&...args)
-        // {
-        //     std::function<void(sharpen::IQuorum&)>
-        //     config{std::bind(std::forward<_Fn>(fn),std::placeholders::_1,std::forward<_Args>(args)...)};
-        //     this->ConfigurateLearners(config);
-        // }
 
         virtual std::uint64_t GetCommitIndex() const noexcept override;
 
