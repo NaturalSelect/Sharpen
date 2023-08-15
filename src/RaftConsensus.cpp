@@ -49,6 +49,7 @@ sharpen::RaftConsensus::RaftConsensus(
     , heartbeatProvider_(nullptr)
     , learners_()
     , changeable_(false)
+    , newPeersVotes_()
     , peersConfig_()
     , worker_(nullptr)
     , logWorker_(nullptr) {
@@ -344,8 +345,15 @@ bool sharpen::RaftConsensus::Writable() const {
     return this->role_ == sharpen::RaftRole::Leader;
 }
 
-bool sharpen::RaftConsensus::Changable() const {
-    return this->Writable();
+bool sharpen::RaftConsensus::DoPeersChangeable() const {
+    return this->Writable() && this->changeable_.load() && !this->peersConfig_.Locked();
+}
+
+bool sharpen::RaftConsensus::PeersChangeable() const {
+    assert(this->worker_ != nullptr);
+    sharpen::AwaitableFuture<bool> future;
+    this->worker_->Invoke(future,&Self::DoPeersChangeable,this);
+    return future.Await();
 }
 
 void sharpen::RaftConsensus::EnsureConfig() const {
@@ -534,6 +542,7 @@ sharpen::Mail sharpen::RaftConsensus::OnHeartbeatRequest(
     sharpen::RaftHeartbeatResponse response;
     response.SetStatus(false);
     response.SetTerm(this->GetTerm());
+    response.SetPeersEpoch(this->peersConfig_.GetEpoch());
     response.SetLeaseRound(request.GetLeaseRound());
     // check leader id
     sharpen::ConsensusWriter leaderRecord{this->leaderRecord_.GetRecord()};
@@ -650,6 +659,7 @@ sharpen::Mail sharpen::RaftConsensus::OnSnapshotRequest(
     sharpen::RaftSnapshotResponse response;
     response.SetTerm(this->GetTerm());
     response.SetStatus(false);
+    response.SetPeersEpoch(this->peersConfig_.GetEpoch());
     response.SetLeaseRound(request.GetLeaseRound());
     // check leader id
     sharpen::ConsensusWriter leaderRecord{this->leaderRecord_.GetRecord()};
@@ -840,6 +850,16 @@ void sharpen::RaftConsensus::OnHeartbeatResponse(const sharpen::RaftHeartbeatRes
             }
         } else if (leaseConfirmed) {
             this->OnStatusChanged({sharpen::ConsensusResultEnum::LeaseConfirmed});
+        }
+        // if the majority of peers finish change
+        if (!this->changeable_ && response.GetPeersEpoch() == this->peersConfig_.GetEpoch()) {
+            this->newPeersVotes_.emplace(actorId);
+            if (this->newPeersVotes_.size() == this->peers_->GetMajority()) {
+                this->changeable_ = true;
+                if (!this->peersConfig_.Locked()) {
+                    this->OnStatusChanged({sharpen::ConsensusResultEnum::PeersChangeable});
+                }
+            }
         }
     } else {
         // if we failure
@@ -1045,6 +1065,7 @@ void sharpen::RaftConsensus::DoAdvance() {
             this->leaseStatus_.NextRound();
             this->heartbeatProvider_->PrepareRound(this->leaseStatus_.GetRound());
         }
+        this->newPeersVotes_.clear();
         if (!this->heartbeatProvider_->Empty()) {
             sharpen::Optional<std::uint64_t> syncIndex{
                 this->heartbeatProvider_->GetSynchronizedIndex()};
@@ -1157,12 +1178,56 @@ void sharpen::RaftConsensus::DoStorePeersConfig(std::set<sharpen::ActorId> peers
         config.SetEpoch(epoch);
         config.Peers() = std::move(peers);
         sharpen::ByteBuffer val{config.ComputeSize()};
-        sharpen::BinarySerializator::StoreTo(config,val);
-        this->statusMap_->Write(std::move(key),std::move(val));
+        sharpen::BinarySerializator::StoreTo(config, val);
+        this->statusMap_->Write(std::move(key), std::move(val));
     }
 }
 
-sharpen::ConsensusConfigResult sharpen::RaftConsensus::DoConfiguratePeers(
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::DoNviPreparePeersChanges() {
+    assert(this->statusMap_ != nullptr);
+    if (this->peersConfig_.Locked()) {
+        return sharpen::ConsensusChangeResult::Confilct;
+    }
+    sharpen::ByteBuffer key{peersConfigKey};
+    sharpen::ConsensusPeersConfiguration config{this->peersConfig_};
+    config.Lock();
+    sharpen::ByteBuffer val;
+    sharpen::BinarySerializator::StoreTo(config, val);
+    this->statusMap_->Write(std::move(key), std::move(val));
+    this->peersConfig_ = std::move(config);
+    return sharpen::ConsensusChangeResult::Success;
+}
+
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::NviPreparePeersChanges() {
+    assert(this->worker_ != nullptr);
+    sharpen::AwaitableFuture<sharpen::ConsensusChangeResult> future;
+    this->worker_->Invoke(future, &Self::DoNviPreparePeersChanges, this);
+    return future.Await();
+}
+
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::DoAbortPeersChanges() {
+    assert(this->statusMap_ != nullptr);
+    if (!this->peersConfig_.Locked()) {
+        return sharpen::ConsensusChangeResult::Confilct;
+    }
+    sharpen::ByteBuffer key{peersConfigKey};
+    sharpen::ConsensusPeersConfiguration config{this->peersConfig_};
+    config.Unlock();
+    sharpen::ByteBuffer val;
+    sharpen::BinarySerializator::StoreTo(config, val);
+    this->statusMap_->Write(std::move(key), std::move(val));
+    this->peersConfig_ = std::move(config);
+    return sharpen::ConsensusChangeResult::Success;
+}
+
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::NviAbortPeersChanges() {
+    assert(this->worker_ != nullptr);
+    sharpen::AwaitableFuture<sharpen::ConsensusChangeResult> future;
+    this->worker_->Invoke(future, &Self::DoAbortPeersChanges, this);
+    return future.Await();
+}
+
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::DoConfiguratePeers(
     std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
     std::unique_ptr<sharpen::IQuorum> quorum{std::move(this->peers_)};
     std::unique_ptr<sharpen::IQuorum> newQuorum{configurater(quorum.get())};
@@ -1172,14 +1237,18 @@ sharpen::ConsensusConfigResult sharpen::RaftConsensus::DoConfiguratePeers(
     if (quorum == nullptr) {
         // check init
         if (!this->CheckInitPeers(newSet)) {
-            return sharpen::ConsensusConfigResult::Invalid;
+            return sharpen::ConsensusChangeResult::Invalid;
         }
     } else {
+        // if not locked, abort changes
+        if (!this->peersConfig_.Locked()) {
+            return sharpen::ConsensusChangeResult::Invalid;
+        }
         // check change peers
         std::set<sharpen::ActorId> oldSet{quorum->GenerateActorsSet()};
         oldSet.emplace(this->id_);
         if (!this->CheckChangePeers(oldSet, newSet)) {
-            return sharpen::ConsensusConfigResult::Invalid;
+            return sharpen::ConsensusChangeResult::Invalid;
         }
     }
     this->DoStorePeersConfig(std::move(newSet));
@@ -1189,12 +1258,12 @@ sharpen::ConsensusConfigResult sharpen::RaftConsensus::DoConfiguratePeers(
         this->peersBroadcaster_.reset(nullptr);
     }
     this->DoSyncHeartbeatProvider();
-    return sharpen::ConsensusConfigResult::Initialized;
+    return sharpen::ConsensusChangeResult::Success;
 }
 
-sharpen::ConsensusConfigResult sharpen::RaftConsensus::NviConfiguratePeers(
+sharpen::ConsensusChangeResult sharpen::RaftConsensus::NviConfiguratePeers(
     std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
-    sharpen::AwaitableFuture<sharpen::ConsensusConfigResult> future;
+    sharpen::AwaitableFuture<sharpen::ConsensusChangeResult> future;
     this->worker_->Invoke(future, &Self::DoConfiguratePeers, this, std::move(configurater));
     return future.Await();
 }

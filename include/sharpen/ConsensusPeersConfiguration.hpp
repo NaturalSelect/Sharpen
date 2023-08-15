@@ -1,6 +1,6 @@
 #pragma once
-#ifndef _SHARPEN_CONSENSUSPEERS_HPP
-#define _SHARPEN_CONSENSUSPEERS_HPP
+#ifndef _SHARPEN_CONSENSUSPEERSCONFIGURATION_HPP
+#define _SHARPEN_CONSENSUSPEERSCONFIGURATION_HPP
 
 #include "ActorId.hpp"
 #include "BinarySerializable.hpp"
@@ -14,6 +14,7 @@ namespace sharpen {
 
         std::uint64_t epoch_;
         std::set<sharpen::ActorId> peers_;
+        bool locked_;
 
     public:
         ConsensusPeersConfiguration() noexcept = default;
@@ -52,6 +53,18 @@ namespace sharpen {
 
         inline const std::set<sharpen::ActorId> &Peers() const noexcept {
             return this->peers_;
+        }
+
+        inline bool Locked() const noexcept {
+            return this->locked_;
+        }
+
+        inline void Lock() noexcept {
+            this->locked_ = true;
+        }
+
+        inline void Unlock() noexcept {
+            this->locked_ = false;
         }
 
         std::size_t ComputeSize() const noexcept;

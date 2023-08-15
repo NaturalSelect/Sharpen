@@ -3,7 +3,7 @@
 #define _SHARPEN_ICONSENSUS_HPP
 
 #include "AwaitableFuture.hpp"
-#include "ConsensusConfigResult.hpp"
+#include "ConsensusChangeResult.hpp"
 #include "ConsensusPeersConfiguration.hpp"
 #include "ConsensusResult.hpp"
 #include "ConsensusWriter.hpp"
@@ -32,7 +32,7 @@ namespace sharpen {
 
         virtual void NviDropLogsUntil(std::uint64_t endIndex) = 0;
 
-        virtual sharpen::ConsensusConfigResult NviConfiguratePeers(
+        virtual sharpen::ConsensusChangeResult NviConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) = 0;
 
         virtual void NviStoreLastAppliedIndex(std::uint64_t index) = 0;
@@ -42,6 +42,18 @@ namespace sharpen {
         virtual sharpen::Optional<sharpen::ConsensusPeersConfiguration>
         NviGetPeersConfiguration() const = 0;
 
+        /*
+            How to change peers:
+                * Write a log to invoke prepare peers changes   (apply)
+                * Write a log to invoke ConfigPeers             (apply)
+        */
+        virtual sharpen::ConsensusChangeResult NviPreparePeersChanges() = 0;
+
+        /*
+            If meet any errors during chaning:
+                * Write a log to invoke abort peers changes     (apply)
+        */
+        virtual sharpen::ConsensusChangeResult NviAbortPeersChanges() = 0;
     public:
         IConsensus() noexcept = default;
 
@@ -67,7 +79,7 @@ namespace sharpen {
             return this->NviWrite(logs);
         }
 
-        virtual bool Changable() const = 0;
+        virtual bool PeersChangeable() const = 0;
 
         inline void WaitNextConsensus(sharpen::Future<sharpen::ConsensusResult> &future) {
             this->NviWaitNextConsensus(future);
@@ -103,12 +115,12 @@ namespace sharpen {
             this->NviDropLogsUntil(endIndex);
         }
 
-        inline sharpen::ConsensusConfigResult ConfiguratePeers(
+        inline sharpen::ConsensusChangeResult ConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
             if (configurater) {
                 return this->NviConfiguratePeers(std::move(configurater));
             }
-            return sharpen::ConsensusConfigResult::Invalid;
+            return sharpen::ConsensusChangeResult::Invalid;
         }
 
         template<typename _Fn,
@@ -118,7 +130,7 @@ namespace sharpen {
                                                           _Fn,
                                                           sharpen::IQuorum *,
                                                           _Args...>::Value>>
-        inline sharpen::ConsensusConfigResult ConfiguratePeers(_Fn &&fn, _Args &&...args) {
+        inline sharpen::ConsensusChangeResult ConfiguratePeers(_Fn &&fn, _Args &&...args) {
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> config{std::bind(
                 std::forward<_Fn>(fn), std::placeholders::_1, std::forward<_Args>(args)...)};
             return this->ConfiguratePeers(std::move(config));
@@ -142,6 +154,16 @@ namespace sharpen {
 
         inline sharpen::Optional<sharpen::ConsensusPeersConfiguration> GetPeersConfiguration() const {
             return this->NviGetPeersConfiguration();
+        }
+
+        // should be invoked when apply log entry
+        inline sharpen::ConsensusChangeResult PreparePeersChanges() {
+            return this->NviPreparePeersChanges();
+        }
+
+        // should be invoked when apply log entry
+        inline sharpen::ConsensusChangeResult AbortPeersChanges() {
+            return this->NviAbortPeersChanges();
         }
     };
 }   // namespace sharpen

@@ -20,7 +20,9 @@ namespace sharpen {
         // lease request by writer 
         LeaseRequested = 2 << 3,
         // a learner is ready for membership change
-        LearnerReady = 2 << 4
+        LearnerReady = 2 << 4,
+        // peers changeable
+        PeersChangeable = 2 << 5
     };
 
     class ConsensusResult
@@ -69,6 +71,10 @@ namespace sharpen {
 
         inline bool IsLeaseRequested() const noexcept {
             return this->IsSet(sharpen::ConsensusResultEnum::LeaseRequested);
+        }
+
+        inline bool IsPeersChangeable() const noexcept {
+            return this->IsSet(sharpen::ConsensusResultEnum::PeersChangeable);
         }
 
         bool IsNone() const noexcept;

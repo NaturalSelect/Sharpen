@@ -15,6 +15,7 @@ namespace sharpen {
         std::uint8_t status_;
         std::uint64_t term_;
         std::uint64_t matchIndex_;
+        std::uint64_t peersEpoch_;
         std::uint64_t leaseRound_;
 
     public:
@@ -72,6 +73,14 @@ namespace sharpen {
 
         inline void SetLeaseRound(std::uint64_t leaseRound) noexcept {
             this->leaseRound_ = leaseRound;
+        }
+
+        inline std::uint64_t GetPeersEpoch() const noexcept {
+            return this->peersEpoch_;
+        }
+
+        inline void SetPeersEpoch(std::uint64_t epoch) noexcept {
+            this->peersEpoch_ = epoch;
         }
 
         std::size_t ComputeSize() const noexcept;

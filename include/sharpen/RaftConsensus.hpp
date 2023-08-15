@@ -90,6 +90,7 @@ namespace sharpen {
         std::set<sharpen::ActorId> learners_;
         // config change
         std::atomic_bool changeable_;
+        std::set<sharpen::ActorId> newPeersVotes_;
         sharpen::ConsensusPeersConfiguration peersConfig_;
 
         // workers
@@ -191,7 +192,7 @@ namespace sharpen {
 
         void DoReceive(sharpen::Mail mail, sharpen::ActorId actorId);
 
-        virtual sharpen::ConsensusConfigResult NviConfiguratePeers(
+        virtual sharpen::ConsensusChangeResult NviConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater)
             override;
 
@@ -202,7 +203,7 @@ namespace sharpen {
         bool CheckChangePeers(const std::set<sharpen::ActorId> &oldPeers,
                               const std::set<sharpen::ActorId> &newPeers) const noexcept;
 
-        sharpen::ConsensusConfigResult DoConfiguratePeers(
+        sharpen::ConsensusChangeResult DoConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater);
 
         void DoReleasePeers();
@@ -230,6 +231,15 @@ namespace sharpen {
 
         void DoStorePeersConfig(std::set<sharpen::ActorId> peers);
 
+        virtual sharpen::ConsensusChangeResult NviPreparePeersChanges() override;
+
+        sharpen::ConsensusChangeResult DoNviPreparePeersChanges();
+
+        virtual sharpen::ConsensusChangeResult NviAbortPeersChanges() override;
+
+        sharpen::ConsensusChangeResult DoAbortPeersChanges();
+
+        bool DoPeersChangeable() const;
     public:
         constexpr static sharpen::ByteSlice voteKey{"vote", 4};
 
@@ -277,7 +287,7 @@ namespace sharpen {
 
         virtual bool Writable() const override;
 
-        virtual bool Changable() const override;
+        virtual bool PeersChangeable() const override;
 
         virtual const sharpen::ILogStorage &ImmutableLogs() const noexcept override;
 
