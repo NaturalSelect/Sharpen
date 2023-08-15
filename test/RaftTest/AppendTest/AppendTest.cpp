@@ -811,7 +811,7 @@ public:
             sharpen::SyncPrintf("Lease %zu\n", i);
             primary->Advance();
             auto result{primary->WaitNextConsensus()};
-            if (!result.IsLeaseConfirmed()) {
+            if (!result.IsLeaseConfirmed() && !result.IsPeersChangeable()) {
                 break;
             }
             count += 1;
@@ -880,7 +880,7 @@ public:
             sharpen::SyncPrintf("Lease %zu\n", i);
             primary->Advance();
             auto result{primary->WaitNextConsensus()};
-            if (!result.IsLeaseConfirmed()) {
+            if (!result.IsLeaseConfirmed() && !result.IsPeersChangeable()) {
                 break;
             }
             count += 1;

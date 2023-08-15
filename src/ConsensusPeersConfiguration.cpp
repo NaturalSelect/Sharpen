@@ -2,6 +2,12 @@
 
 #include <sharpen/Varint.hpp>
 
+sharpen::ConsensusPeersConfiguration::ConsensusPeersConfiguration() noexcept
+    : epoch_(0)
+    , peers_()
+    , locked_(false) {
+}
+
 sharpen::ConsensusPeersConfiguration::ConsensusPeersConfiguration(Self &&other) noexcept
     : epoch_(other.epoch_)
     , peers_(std::move(other.peers_))
@@ -37,7 +43,7 @@ std::size_t sharpen::ConsensusPeersConfiguration::LoadFrom(const char *data, std
     }
     std::size_t offset{0};
     sharpen::Varuint64 builder{0};
-    offset += sharpen::BinarySerializator::LoadFrom(builder,data,size);
+    offset += sharpen::BinarySerializator::LoadFrom(builder, data, size);
     this->epoch_ = builder.Get();
     if (size < 2 + offset) {
         throw sharpen::CorruptedDataError{"corrupted consensus peers"};
@@ -49,7 +55,7 @@ std::size_t sharpen::ConsensusPeersConfiguration::LoadFrom(const char *data, std
         throw sharpen::CorruptedDataError{"corrupted consensus peers"};
     }
     std::uint8_t locked;
-    offset += sharpen::BinarySerializator::LoadFrom(locked,data + offset,size - offset);
+    offset += sharpen::BinarySerializator::LoadFrom(locked, data + offset, size - offset);
     this->locked_ = locked;
     return offset;
 }
@@ -60,6 +66,6 @@ std::size_t sharpen::ConsensusPeersConfiguration::UnsafeStoreTo(char *data) cons
     offset += sharpen::BinarySerializator::UnsafeStoreTo(builder, data + offset);
     offset += sharpen::BinarySerializator::UnsafeStoreTo(this->peers_, data + offset);
     std::uint8_t locked{this->locked_};
-    offset += sharpen::BinarySerializator::UnsafeStoreTo(locked,data + offset);
+    offset += sharpen::BinarySerializator::UnsafeStoreTo(locked, data + offset);
     return offset;
 }

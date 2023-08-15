@@ -17,7 +17,7 @@ namespace sharpen {
         bool locked_;
 
     public:
-        ConsensusPeersConfiguration() noexcept = default;
+        ConsensusPeersConfiguration() noexcept;
 
         ConsensusPeersConfiguration(const Self &other) = default;
 
