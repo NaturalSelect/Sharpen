@@ -184,13 +184,13 @@ namespace sharpen {
 
         void DoReceive(sharpen::Mail mail, sharpen::ActorId actorId);
 
-        virtual void NviConfiguratePeers(
+        virtual sharpen::ConsensusConfigResult NviConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater)
             override;
 
         void DoSyncHeartbeatProvider();
 
-        void DoConfiguratePeers(
+        sharpen::ConsensusConfigResult DoConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater);
 
         void DoReleasePeers();

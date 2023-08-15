@@ -79,9 +79,9 @@ std::unique_ptr<sharpen::IQuorum> ConfigPeers(sharpen::IQuorum *quorum,
                                               sharpen::IMailReceiver *receiver,
                                               std::uint32_t magic,
                                               bool pipeline) {
+    (void)quorum;
     assert(receiver != nullptr);
-    std::unique_ptr<sharpen::IQuorum> peers{quorum};
-    peers.reset(new (std::nothrow) sharpen::Quorum{});
+    std::unique_ptr<sharpen::IQuorum> peers{new (std::nothrow) sharpen::Quorum{}};
     if (!peers) {
         std::terminate();
     }

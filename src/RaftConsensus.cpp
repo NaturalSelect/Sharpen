@@ -1070,23 +1070,25 @@ void sharpen::RaftConsensus::DoSyncHeartbeatProvider() {
     }
 }
 
-void sharpen::RaftConsensus::DoConfiguratePeers(
+sharpen::ConsensusConfigResult sharpen::RaftConsensus::DoConfiguratePeers(
     std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
     std::unique_ptr<sharpen::IQuorum> quorum{std::move(this->peers_)};
-    this->peers_ = configurater(quorum.release());
-    assert(this->peers_ != nullptr);
+    std::unique_ptr<sharpen::IQuorum> newQuorum{configurater(quorum.get())};
+    assert(newQuorum != nullptr);
+    this->peers_ = std::move(newQuorum);
     // close broadcaster
     if (this->peersBroadcaster_) {
         this->peersBroadcaster_.reset(nullptr);
     }
     this->DoSyncHeartbeatProvider();
+    return sharpen::ConsensusConfigResult::Initialized;
 }
 
-void sharpen::RaftConsensus::NviConfiguratePeers(
+sharpen::ConsensusConfigResult sharpen::RaftConsensus::NviConfiguratePeers(
     std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
-    sharpen::AwaitableFuture<void> future;
+    sharpen::AwaitableFuture<sharpen::ConsensusConfigResult> future;
     this->worker_->Invoke(future, &Self::DoConfiguratePeers, this, std::move(configurater));
-    future.Await();
+    return future.Await();
 }
 
 void sharpen::RaftConsensus::DoReleasePeers() {

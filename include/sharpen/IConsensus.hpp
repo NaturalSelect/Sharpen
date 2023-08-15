@@ -10,6 +10,7 @@
 #include "WriteLogsResult.hpp"
 #include "ConsensusWriter.hpp"
 #include "ConsensusResult.hpp"
+#include "ConsensusConfigResult.hpp"
 #include <memory>
 
 namespace sharpen {
@@ -29,7 +30,7 @@ namespace sharpen {
 
         virtual void NviDropLogsUntil(std::uint64_t endIndex) = 0;
 
-        virtual void NviConfiguratePeers(
+        virtual sharpen::ConsensusConfigResult NviConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) = 0;
 
         virtual void NviStoreLastAppliedIndex(std::uint64_t index) = 0;
@@ -99,11 +100,12 @@ namespace sharpen {
             this->NviDropLogsUntil(endIndex);
         }
 
-        inline void ConfiguratePeers(
+        inline sharpen::ConsensusConfigResult ConfiguratePeers(
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> configurater) {
             if (configurater) {
-                this->NviConfiguratePeers(std::move(configurater));
+                return this->NviConfiguratePeers(std::move(configurater));
             }
+            return sharpen::ConsensusConfigResult::Invalid;
         }
 
         template<typename _Fn,
@@ -113,10 +115,10 @@ namespace sharpen {
                                                           _Fn,
                                                           sharpen::IQuorum *,
                                                           _Args...>::Value>>
-        inline void ConfiguratePeers(_Fn &&fn, _Args &&...args) {
+        inline sharpen::ConsensusConfigResult ConfiguratePeers(_Fn &&fn, _Args &&...args) {
             std::function<std::unique_ptr<sharpen::IQuorum>(sharpen::IQuorum *)> config{std::bind(
                 std::forward<_Fn>(fn), std::placeholders::_1, std::forward<_Args>(args)...)};
-            this->ConfiguratePeers(std::move(config));
+            return this->ConfiguratePeers(std::move(config));
         }
 
         virtual void ReleasePeers() = 0;
